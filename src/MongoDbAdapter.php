@@ -17,10 +17,10 @@ use Prooph\EventStore\Snapshot\Adapter\Adapter;
 use Prooph\EventStore\Snapshot\Snapshot;
 
 /**
- * Class MongoDbSnapshotAdapter
+ * Class MongoDbAdapter
  * @package Prooph\EventStore\Snapshot\Adapter
  */
-final class MongoDbSnapshotAdapter implements Adapter
+final class MongoDbAdapter implements Adapter
 {
     /**
      * @var \MongoClient
@@ -48,25 +48,26 @@ final class MongoDbSnapshotAdapter implements Adapter
      *
      * @var array
      */
-    private $snapshotCollectionMap = [];
+    private $snapshotGridFsMap = [];
 
     /**
      * @param \MongoClient $mongoClient
      * @param string $dbName
      * @param array|null $writeConcern
-     * @param array $snapshotCollectionMap
+     * @param array $snapshotGridFsMap
      */
     public function __construct(
         \MongoClient $mongoClient,
         $dbName,
         array $writeConcern = null,
-        array $snapshotCollectionMap = []
+        array $snapshotGridFsMap = []
     ) {
         Assertion::minLength($dbName, 1, 'Mongo database name is missing');
 
         $this->mongoClient      = $mongoClient;
         $this->dbName           = $dbName;
-        $this->snapshotCollectionMap = $snapshotCollectionMap;
+        $this->snapshotGridFsMap = $snapshotGridFsMap;
+
         if (null !== $writeConcern) {
             $this->writeConcern = $writeConcern;
         }
@@ -81,32 +82,30 @@ final class MongoDbSnapshotAdapter implements Adapter
      */
     public function get(AggregateType $aggregateType, $aggregateId)
     {
-        $collection = $this->getCollection($aggregateType->toString());
+        $gridFs = $this->getGridFs($aggregateType );
 
-        $data = $collection->findOne(
+        $gridFsfile = $gridFs->findOne(
             [
                 '$query' => [
                     'aggregate_type' => $aggregateType->toString(),
                     'aggregate_id' => $aggregateId,
-                ]
-            ],
-            [
+                ],
                 '$orderBy' => [
-                    'last_version' => -1
-                ]
+                    'last_version' => -1,
+                ],
             ]
         );
 
-        if (!$data) {
+        if (!$gridFsfile) {
             return;
         }
 
         return new Snapshot(
             $aggregateType,
             $aggregateId,
-            unserialize($data['aggregate_root']),
-            $data['last_version'],
-            $data['created_at']
+            unserialize($gridFsfile->getBytes()),
+            $gridFsfile->file['last_version'],
+            \DateTimeImmutable::createFromMutable($gridFsfile->file['created_at']->toDateTime())
         );
     }
 
@@ -118,15 +117,15 @@ final class MongoDbSnapshotAdapter implements Adapter
      */
     public function add(Snapshot $snapshot)
     {
-        $collection = $this->getCollection($snapshot->aggregateType());
+        $gridFs = $this->getGridFs($snapshot->aggregateType());
 
-        $collection->insert(
+        $gridFs->storeBytes(
+            serialize($snapshot->aggregateRoot()),
             [
                 'aggregate_type' => $snapshot->aggregateType()->toString(),
                 'aggregate_id' => $snapshot->aggregateId(),
                 'last_version' => $snapshot->lastVersion(),
                 'created_at' => new \MongoDate($snapshot->createdAt()->getTimestamp(), $snapshot->createdAt()->format('u')),
-                'aggregate_root' => serialize($snapshot->aggregateRoot()),
             ],
             $this->writeConcern
         );
@@ -136,29 +135,28 @@ final class MongoDbSnapshotAdapter implements Adapter
      * Get mongo db stream collection
      *
      * @param AggregateType $aggregateType
-     * @return \MongoCollection
+     * @return \MongoGridFs
      */
-    private function getCollection(AggregateType $aggregateType)
+    private function getGridFs(AggregateType $aggregateType)
     {
-        $collection = $this->mongoClient->selectCollection($this->dbName, $this->getCollectionName($aggregateType));
-        return $collection;
+        return $this->mongoClient->selectDB($this->dbName)->getGridFS($this->getGridFsName($aggregateType));
     }
 
     /**
      * @param AggregateType $aggregateType
      * @return string
      */
-    private function getCollectionName(AggregateType $aggregateType)
+    private function getGridFsName(AggregateType $aggregateType)
     {
-        if (isset($this->snapshotCollectionMap[$aggregateType->toString()])) {
-            $collectionName = $this->snapshotCollectionMap[$aggregateType->toString()];
+        if (isset($this->snapshotGridFsMap[$aggregateType->toString()])) {
+            $gridFsName = $this->snapshotGridFsMap[$aggregateType->toString()];
         } else {
-            $collectionName = strtolower($this->getShortAggregateTypeName($aggregateType));
-            if (strpos($collectionName, "_snapshot") === false) {
-                $collectionName.= "_snapshot";
+            $gridFsName = strtolower($this->getShortAggregateTypeName($aggregateType));
+            if (strpos($gridFsName, "_snapshot") === false) {
+                $gridFsName.= "_snapshot";
             }
         }
-        return $collectionName;
+        return $gridFsName;
     }
 
     /**

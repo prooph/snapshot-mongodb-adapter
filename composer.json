@@ -37,8 +37,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "ProophTest\\EventStore\\Snapshot\\Adapter\\MongoDb": "tests/",
-            "Prooph\\EventStoreTest\\": "vendor/prooph/event-store/tests/"
+            "ProophTest\\EventStore\\Snapshot\\Adapter\\MongoDb\\": "tests/"
         }
     }
 }
