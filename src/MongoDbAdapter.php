@@ -100,12 +100,14 @@ final class MongoDbAdapter implements Adapter
             return;
         }
 
+        $createdAt = $gridFsfile->file['created_at']->toDateTime();
+
         return new Snapshot(
             $aggregateType,
             $aggregateId,
             unserialize($gridFsfile->getBytes()),
             $gridFsfile->file['last_version'],
-            \DateTimeImmutable::createFromMutable($gridFsfile->file['created_at']->toDateTime())
+            \DateTimeImmutable::createFromFormat('Y-m-d Y:i:s', $createdAt->format('Y-m-d Y:i:s'))
         );
     }
 
