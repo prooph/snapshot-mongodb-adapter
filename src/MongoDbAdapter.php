@@ -82,7 +82,7 @@ final class MongoDbAdapter implements Adapter
      */
     public function get(AggregateType $aggregateType, $aggregateId)
     {
-        $gridFs = $this->getGridFs($aggregateType );
+        $gridFs = $this->getGridFs($aggregateType);
 
         $gridFsfile = $gridFs->findOne(
             [
@@ -100,12 +100,14 @@ final class MongoDbAdapter implements Adapter
             return;
         }
 
+        $createdAt = $gridFsfile->file['created_at']->toDateTime();
+
         return new Snapshot(
             $aggregateType,
             $aggregateId,
             unserialize($gridFsfile->getBytes()),
             $gridFsfile->file['last_version'],
-            \DateTimeImmutable::createFromMutable($gridFsfile->file['created_at']->toDateTime())
+            \DateTimeImmutable::createFromFormat('Y-m-d\TH:i:s.u', $createdAt->format('Y-m-d\TH:i:s.u'))
         );
     }
 
