@@ -13,17 +13,17 @@ namespace ProophTest\EventStore\Adpater\MongoDb;
 
 use PHPUnit_Framework_TestCase as TestCase;
 use Prooph\EventStore\Aggregate\AggregateType;
-use Prooph\EventStore\Snapshot\Adapter\MongoDb\MongoDbAdapter;
+use Prooph\EventStore\Snapshot\Adapter\MongoDb\MongoDbSnapshotAdapter;
 use Prooph\EventStore\Snapshot\Snapshot;
 
 /**
- * Class MongoDbAdapterTest
+ * Class MongoDbSnapshotAdapterTest
  * @package ProophTest\EventStore\Adpater\MongoDb
  */
-final class MongoDbAdapterTest extends TestCase
+final class MongoDbSnapshotAdapterTest extends TestCase
 {
     /**
-     * @var MongoDbAdapter
+     * @var MongoDbSnapshotAdapter
      */
     private $adapter;
 
@@ -37,7 +37,7 @@ final class MongoDbAdapterTest extends TestCase
         $this->client = new \MongoClient();
         $this->client->selectDB('test')->drop();
 
-        $this->adapter = new MongoDbAdapter($this->client, 'test');
+        $this->adapter = new MongoDbSnapshotAdapter($this->client, 'test');
     }
 
     protected function tearDown()
@@ -77,7 +77,7 @@ final class MongoDbAdapterTest extends TestCase
      */
     public function it_uses_custom_snapshot_grid_fs_map_and_write_concern()
     {
-        $this->adapter = new MongoDbAdapter(
+        $this->adapter = new MongoDbSnapshotAdapter(
             $this->client,
             'test',
             [

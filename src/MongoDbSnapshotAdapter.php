@@ -17,10 +17,10 @@ use Prooph\EventStore\Snapshot\Adapter\Adapter;
 use Prooph\EventStore\Snapshot\Snapshot;
 
 /**
- * Class MongoDbAdapter
- * @package Prooph\EventStore\Snapshot\Adapter
+ * Class MongoDbSnapshotAdapter
+ * @package Prooph\EventStore\Snapshot\Adapter\MongoDb
  */
-final class MongoDbAdapter implements Adapter
+final class MongoDbSnapshotAdapter implements Adapter
 {
     /**
      * @var \MongoClient
