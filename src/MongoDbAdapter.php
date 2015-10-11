@@ -107,7 +107,7 @@ final class MongoDbAdapter implements Adapter
             $aggregateId,
             unserialize($gridFsfile->getBytes()),
             $gridFsfile->file['last_version'],
-            \DateTimeImmutable::createFromFormat('Y-m-d Y:i:s', $createdAt->format('Y-m-d Y:i:s'))
+            \DateTimeImmutable::createFromFormat('Y-m-d\TH:i:s.u', $createdAt->format('Y-m-d\TH:i:s.u'))
         );
     }
 
