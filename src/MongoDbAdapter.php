@@ -82,7 +82,7 @@ final class MongoDbAdapter implements Adapter
      */
     public function get(AggregateType $aggregateType, $aggregateId)
     {
-        $gridFs = $this->getGridFs($aggregateType );
+        $gridFs = $this->getGridFs($aggregateType);
 
         $gridFsfile = $gridFs->findOne(
             [
