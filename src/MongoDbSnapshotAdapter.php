@@ -1,6 +1,6 @@
 <?php
 /*
- * This file is part of the prooph/service-bus.
+ * This file is part of the prooph/snapshot-mongodb-adapter.
  * (c) 2014 - 2015 prooph software GmbH <contact@prooph.de>
  *
  * For the full copyright and license information, please view the LICENSE
@@ -12,6 +12,9 @@
 namespace Prooph\EventStore\Snapshot\Adapter\MongoDb;
 
 use Assert\Assertion;
+use DateTimeImmutable;
+use DateTimeZone;
+use MongoClient;
 use Prooph\EventStore\Aggregate\AggregateType;
 use Prooph\EventStore\Snapshot\Adapter\Adapter;
 use Prooph\EventStore\Snapshot\Snapshot;
@@ -51,13 +54,13 @@ final class MongoDbSnapshotAdapter implements Adapter
     private $snapshotGridFsMap = [];
 
     /**
-     * @param \MongoClient $mongoClient
+     * @param MongoClient $mongoClient
      * @param string $dbName
      * @param array|null $writeConcern
      * @param array $snapshotGridFsMap
      */
     public function __construct(
-        \MongoClient $mongoClient,
+        MongoClient $mongoClient,
         $dbName,
         array $writeConcern = null,
         array $snapshotGridFsMap = []
@@ -107,7 +110,11 @@ final class MongoDbSnapshotAdapter implements Adapter
             $aggregateId,
             unserialize($gridFsfile->getBytes()),
             $gridFsfile->file['last_version'],
-            \DateTimeImmutable::createFromFormat('Y-m-d\TH:i:s.u', $createdAt->format('Y-m-d\TH:i:s.u'))
+            DateTimeImmutable::createFromFormat(
+                'Y-m-d\TH:i:s.u',
+                $createdAt->format('Y-m-d\TH:i:s.u'),
+                new DateTimeZone('UTC')
+            )
         );
     }
 
@@ -127,7 +134,10 @@ final class MongoDbSnapshotAdapter implements Adapter
                 'aggregate_type' => $snapshot->aggregateType()->toString(),
                 'aggregate_id' => $snapshot->aggregateId(),
                 'last_version' => $snapshot->lastVersion(),
-                'created_at' => new \MongoDate($snapshot->createdAt()->getTimestamp(), $snapshot->createdAt()->format('u')),
+                'created_at' => new \MongoDate(
+                    $snapshot->createdAt()->getTimestamp(),
+                    $snapshot->createdAt()->format('u')
+                ),
             ],
             $this->writeConcern
         );

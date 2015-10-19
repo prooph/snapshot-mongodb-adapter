@@ -1,6 +1,6 @@
 <?php
 /*
- * This file is part of the prooph/service-bus.
+ * This file is part of the prooph/snapshot-mongodb-adapter.
  * (c) 2014 - 2015 prooph software GmbH <contact@prooph.de>
  *
  * For the full copyright and license information, please view the LICENSE
@@ -9,7 +9,7 @@
  * Date: 10/10/15 - 15:37
  */
 
-namespace ProophTest\EventStore\Adpater\MongoDb;
+namespace ProophTest\EventStore\Snapshot\Adpater\MongoDb;
 
 use PHPUnit_Framework_TestCase as TestCase;
 use Prooph\EventStore\Aggregate\AggregateType;
@@ -59,7 +59,7 @@ final class MongoDbSnapshotAdapterTest extends TestCase
         if (false === strpos($time, '.')) {
             $time .= '.0000';
         }
-        $now = \DateTimeImmutable::createFromFormat('U.u', $time);
+        $now = \DateTimeImmutable::createFromFormat('U.u', $time, new \DateTimeZone('UTC'));
 
         $snapshot = new Snapshot($aggregateType, 'id', $aggregateRoot, 1, $now);
 
