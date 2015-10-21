@@ -12,16 +12,17 @@
 namespace Prooph\EventStore\Snapshot\Adapter\MongoDb\Container;
 
 use Interop\Config\ConfigurationTrait;
-use Interop\Config\RequiresContainerId;
+use Interop\Config\ProvidesDefaultOptions;
+use Interop\Config\RequiresConfig;
+use Interop\Config\RequiresMandatoryOptions;
 use Interop\Container\ContainerInterface;
-use Prooph\EventStore\Exception\ConfigurationException;
 use Prooph\EventStore\Snapshot\Adapter\MongoDb\MongoDbSnapshotAdapter;
 
 /**
  * Class MongoDbSnapshotAdapterFactory
  * @package Prooph\EventStore\Snapshot\Adapter\MongoDb\Container
  */
-final class MongoDbSnapshotAdapterFactory implements RequiresContainerId
+final class MongoDbSnapshotAdapterFactory implements RequiresConfig, RequiresMandatoryOptions, ProvidesDefaultOptions
 {
     use ConfigurationTrait;
 
@@ -32,44 +33,18 @@ final class MongoDbSnapshotAdapterFactory implements RequiresContainerId
     public function __invoke(ContainerInterface $container)
     {
         $config = $container->get('config');
+        $config = $this->options($config)['snapshot_adapter']['options'];
 
-        $snapshotAdapterConfig = $this->optionsWithFallback($config);
-
-        if (!isset($snapshotAdapterConfig['options'])) {
-            throw ConfigurationException::configurationError(
-                'Snapshot adapter options missing'
-            );
-        }
-
-        if (!is_array($snapshotAdapterConfig['options'])
-            && !$snapshotAdapterConfig['options'] instanceof \ArrayAccess
-        ) {
-            throw ConfigurationException::configurationError(
-                'Snapshot adapter options must be an array or implement ArrayAccess'
-            );
-        }
-
-        $adapterOptions = $snapshotAdapterConfig['options'];
-
-        $mongoClient = isset($adapterOptions['mongo_connection_alias'])
-            ? $container->get($adapterOptions['mongo_connection_alias'])
+        $mongoClient = isset($config['mongo_connection_alias'])
+            ? $container->get($config['mongo_connection_alias'])
             : new \MongoClient;
 
-        if (!isset($adapterOptions['db_name'])) {
-            throw ConfigurationException::configurationError(
-                'Mongo database name is missing'
-            );
-        }
-
-        $dbName = $adapterOptions['db_name'];
-
-        $writeConcern = isset($adapterOptions['write_concern']) ? $adapterOptions['write_concern'] : [];
-
-        $snapshotGridFsMap = isset($adapterOptions['snapshot_grid_fs_map'])
-            ? $adapterOptions['snapshot_grid_fs_map']
-            : [];
-
-        return new MongoDbSnapshotAdapter($mongoClient, $dbName, $writeConcern, $snapshotGridFsMap);
+        return new MongoDbSnapshotAdapter(
+            $mongoClient,
+            $config['db_name'],
+            $config['write_concern'],
+            $config['snapshot_grid_fs_map']
+        );
     }
 
     /**
@@ -91,8 +66,26 @@ final class MongoDbSnapshotAdapterFactory implements RequiresContainerId
     /**
      * @inheritdoc
      */
-    public function containerId()
+    public function mandatoryOptions()
     {
-        return 'snapshot_adapter';
+        return ['snapshot_adapter' => ['options' => ['db_name']]];
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function defaultOptions()
+    {
+        return [
+            'snapshot_adapter' => [
+                'options' => [
+                    'snapshot_grid_fs_map' => [],
+                    'write_concern' => [
+                        'w' => 1,
+                        'j' => true
+                    ]
+                ]
+            ]
+        ];
     }
 }
