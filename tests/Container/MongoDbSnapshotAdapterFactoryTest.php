@@ -24,6 +24,7 @@ final class MongoDbSnapshotAdapterFactoryTest extends TestCase
 {
     /**
      * @test
+     * @group my
      */
     public function it_creates_adapter_with_minimum_settings()
     {
@@ -79,74 +80,5 @@ final class MongoDbSnapshotAdapterFactoryTest extends TestCase
         $adapter = $factory($container->reveal());
 
         $this->assertInstanceOf(MongoDbSnapshotAdapter::class, $adapter);
-    }
-
-    /**
-     * @test
-     * @expectedException \Prooph\EventStore\Exception\ConfigurationException
-     * @expectedExceptionMessage [Configuration Error] Snapshot adapter options missing
-     */
-    public function it_throws_exception_when_config_options_missing()
-    {
-        $container = $this->prophesize(ContainerInterface::class);
-        $container->get('config')->willReturn([
-            'prooph' => [
-                'event_store' => [
-                    'snapshot_adapter' => [
-                        'type' => MongoDbSnapshotAdapter::class
-                    ]
-                ]
-            ]
-        ]);
-
-        $factory = new MongoDbSnapshotAdapterFactory();
-        $factory($container->reveal());
-    }
-
-    /**
-     * @test
-     * @expectedException \Prooph\EventStore\Exception\ConfigurationException
-     * @expectedExceptionMessage [Configuration Error] Mongo database name is missing
-     */
-    public function it_throws_exception_when_db_name_missing()
-    {
-        $container = $this->prophesize(ContainerInterface::class);
-        $container->get('config')->willReturn([
-            'prooph' => [
-                'event_store' => [
-                    'snapshot_adapter' => [
-                        'type' => MongoDbSnapshotAdapter::class,
-                        'options' => [
-                        ]
-                    ]
-                ]
-            ]
-        ]);
-
-        $factory = new MongoDbSnapshotAdapterFactory();
-        $factory($container->reveal());
-    }
-
-    /**
-     * @test
-     * @expectedException \Prooph\EventStore\Exception\ConfigurationException
-     * @expectedExceptionMessage [Configuration Error] Snapshot adapter options must be an array or implement ArrayAccess
-     */
-    public function it_throws_exception_when_config_options_is_not_array_or_array_access()
-    {
-        $container = $this->prophesize(ContainerInterface::class);
-        $container->get('config')->willReturn([
-            'prooph' => [
-                'event_store' => [
-                    'snapshot_adapter' => [
-                        'type' => MongoDbSnapshotAdapter::class,
-                        'options' => new \stdClass(),
-                    ]
-                ]
-            ]
-        ]);
-
-        $factory = new MongoDbSnapshotAdapterFactory();
-        $factory($container->reveal());
     }
 }
