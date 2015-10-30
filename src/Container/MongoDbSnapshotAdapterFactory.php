@@ -33,7 +33,7 @@ final class MongoDbSnapshotAdapterFactory implements RequiresConfig, RequiresMan
     public function __invoke(ContainerInterface $container)
     {
         $config = $container->get('config');
-        $config = $this->options($config)['snapshot_adapter']['options'];
+        $config = $this->options($config)['adapter']['options'];
 
         $mongoClient = isset($config['mongo_connection_alias'])
             ? $container->get($config['mongo_connection_alias'])
@@ -60,7 +60,7 @@ final class MongoDbSnapshotAdapterFactory implements RequiresConfig, RequiresMan
      */
     public function packageName()
     {
-        return 'event_store';
+        return 'snapshot_store';
     }
 
     /**
@@ -68,7 +68,7 @@ final class MongoDbSnapshotAdapterFactory implements RequiresConfig, RequiresMan
      */
     public function mandatoryOptions()
     {
-        return ['snapshot_adapter' => ['options' => ['db_name']]];
+        return ['adapter' => ['options' => ['db_name']]];
     }
 
     /**
@@ -77,7 +77,7 @@ final class MongoDbSnapshotAdapterFactory implements RequiresConfig, RequiresMan
     public function defaultOptions()
     {
         return [
-            'snapshot_adapter' => [
+            'adapter' => [
                 'options' => [
                     'snapshot_grid_fs_map' => [],
                     'write_concern' => [

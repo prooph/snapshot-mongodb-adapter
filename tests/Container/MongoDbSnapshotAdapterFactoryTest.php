@@ -31,8 +31,8 @@ final class MongoDbSnapshotAdapterFactoryTest extends TestCase
         $container = $this->prophesize(ContainerInterface::class);
         $container->get('config')->willReturn([
             'prooph' => [
-                'event_store' => [
-                    'snapshot_adapter' => [
+                'snapshot_store' => [
+                    'adapter' => [
                         'type' => MongoDbSnapshotAdapter::class,
                         'options' => [
                             'db_name' => 'test-db-name'
@@ -56,8 +56,8 @@ final class MongoDbSnapshotAdapterFactoryTest extends TestCase
         $container = $this->prophesize(ContainerInterface::class);
         $container->get('config')->willReturn([
             'prooph' => [
-                'event_store' => [
-                    'snapshot_adapter' => [
+                'snapshot_store' => [
+                    'adapter' => [
                         'type' => MongoDbSnapshotAdapter::class,
                         'options' => [
                             'db_name' => 'test-db-name',

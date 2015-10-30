@@ -6,6 +6,17 @@ MongoDB Adapter for the Snapshot Store
 [![Coverage Status](https://coveralls.io/repos/prooph/snapshot-mongodb-adapter/badge.svg?branch=master&service=github)](https://coveralls.io/github/prooph/snapshot-mongodb-adapter?branch=master)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/prooph/improoph)
 
+## Set Up
+
+How to use the adapter is explained in the [prooph/event-store docs](https://github.com/prooph/event-store/blob/master/docs/snapshots.md).
+
+## Interop Factory
+
+Some general notes about how to use interop factories shipped with prooph components can be found in the [event store docs](https://github.com/prooph/event-store/blob/master/docs/interop_factories.md).
+Use the [mongodb snapshot adapter factory](src/Container/MongoDbSnapshotAdapterFactory.php) to set up the adapter. If your IoC container supports callable factories
+you can register the factory under a service id of your choice and configure this service id as `$config['prooph']['snapshot_store']['adpater']['type'] = <adapter_service_id>`.
+
+
 ## Indexing
 
 For faster access to the snapshots, it's recommended to index the metadata.
