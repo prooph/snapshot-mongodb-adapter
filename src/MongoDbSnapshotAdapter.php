@@ -119,12 +119,12 @@ final class MongoDbSnapshotAdapter implements Adapter
     }
 
     /**
-     * Add a snapshot
+     * Save a snapshot
      *
      * @param Snapshot $snapshot
      * @return void
      */
-    public function add(Snapshot $snapshot)
+    public function save(Snapshot $snapshot)
     {
         $gridFs = $this->getGridFs($snapshot->aggregateType());
 
@@ -138,6 +138,17 @@ final class MongoDbSnapshotAdapter implements Adapter
                     $snapshot->createdAt()->getTimestamp(),
                     $snapshot->createdAt()->format('u')
                 ),
+            ],
+            $this->writeConcern
+        );
+
+        $gridFs->remove(
+            [
+                'aggregate_type' => $snapshot->aggregateType()->toString(),
+                'aggregate_id' => $snapshot->aggregateId(),
+                'last_version' => [
+                    '$lt' => $snapshot->lastVersion()
+                ]
             ],
             $this->writeConcern
         );
