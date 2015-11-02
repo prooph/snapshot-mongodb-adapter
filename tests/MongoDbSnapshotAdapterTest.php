@@ -48,7 +48,7 @@ final class MongoDbSnapshotAdapterTest extends TestCase
     /**
      * @test
      */
-    public function it_adds_and_reads()
+    public function it_saves_and_reads()
     {
         $aggregateType = AggregateType::fromString('foo');
 
@@ -63,13 +63,21 @@ final class MongoDbSnapshotAdapterTest extends TestCase
 
         $snapshot = new Snapshot($aggregateType, 'id', $aggregateRoot, 1, $now);
 
-        $this->adapter->add($snapshot);
+        $this->adapter->save($snapshot);
+
+        $snapshot = new Snapshot($aggregateType, 'id', $aggregateRoot, 1, $now);
+
+        $this->adapter->save($snapshot);
 
         $this->assertNull($this->adapter->get($aggregateType, 'invalid'));
 
         $readSnapshot = $this->adapter->get($aggregateType, 'id');
 
         $this->assertEquals($snapshot, $readSnapshot);
+
+        $gridFs = $this->client->selectDB('test')->getGridFS('bar');
+        $files = $gridFs->find();
+        $this->assertEquals(1, count($files));
     }
 
     /**
@@ -102,7 +110,7 @@ final class MongoDbSnapshotAdapterTest extends TestCase
 
         $snapshot = new Snapshot($aggregateType, 'id', $aggregateRoot, 1, $now);
 
-        $this->adapter->add($snapshot);
+        $this->adapter->save($snapshot);
 
         $gridFs = $this->client->selectDB('test')->getGridFS('bar');
         $file = $gridFs->findOne();
