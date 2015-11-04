@@ -1,7 +1,7 @@
 {
     "name": "prooph/snapshot-mongodb-adapter",
     "description": "Snapshot MongoDB Adapter for ProophEventStore",
-    "homepage": "https://github.com/prooph/snapshot-mongodb-adapter",
+    "homepage": "http://getprooph.org/",
     "license": "BSD-3-Clause",
     "authors": [
         {
