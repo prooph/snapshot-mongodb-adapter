@@ -24,7 +24,6 @@ final class MongoDbSnapshotAdapterFactoryTest extends TestCase
 {
     /**
      * @test
-     * @group my
      */
     public function it_creates_adapter_with_minimum_settings()
     {
@@ -74,7 +73,7 @@ final class MongoDbSnapshotAdapterFactoryTest extends TestCase
                 ]
             ]
         ]);
-        $container->get('mongo-client')->willReturn(new \MongoClient());
+        $container->get('mongo-client')->willReturn($this->prophesize(\MongoClient::class)->reveal());
 
         $factory = new MongoDbSnapshotAdapterFactory();
         $adapter = $factory($container->reveal());
