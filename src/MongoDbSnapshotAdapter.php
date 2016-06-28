@@ -43,7 +43,6 @@ final class MongoDbSnapshotAdapter implements Adapter
      */
     private $writeConcern = [
         'w' => 1,
-        'j' => true
     ];
 
     /**
@@ -105,10 +104,23 @@ final class MongoDbSnapshotAdapter implements Adapter
 
         $createdAt = $gridFsfile->file['created_at']->toDateTime();
 
+        try {
+            $aggregateRoot = unserialize($gridFsfile->getBytes());
+        } catch (\Exception $e) {
+            // problem getting file from mongodb
+            return;
+        }
+
+        $aggregateTypeString = $aggregateType->toString();
+        if (! $aggregateRoot instanceof $aggregateTypeString) {
+            // invalid instance returned
+            return;
+        }
+
         return new Snapshot(
             $aggregateType,
             $aggregateId,
-            unserialize($gridFsfile->getBytes()),
+            $aggregateRoot,
             $gridFsfile->file['last_version'],
             DateTimeImmutable::createFromFormat(
                 'Y-m-d\TH:i:s.u',
@@ -128,16 +140,18 @@ final class MongoDbSnapshotAdapter implements Adapter
     {
         $gridFs = $this->getGridFs($snapshot->aggregateType());
 
+        $createdAt = new \MongoDate(
+            $snapshot->createdAt()->getTimestamp(),
+            $snapshot->createdAt()->format('u')
+        );
+
         $gridFs->storeBytes(
             serialize($snapshot->aggregateRoot()),
             [
                 'aggregate_type' => $snapshot->aggregateType()->toString(),
                 'aggregate_id' => $snapshot->aggregateId(),
                 'last_version' => $snapshot->lastVersion(),
-                'created_at' => new \MongoDate(
-                    $snapshot->createdAt()->getTimestamp(),
-                    $snapshot->createdAt()->format('u')
-                ),
+                'created_at' => $createdAt,
             ],
             $this->writeConcern
         );
@@ -148,6 +162,17 @@ final class MongoDbSnapshotAdapter implements Adapter
                 'aggregate_id' => $snapshot->aggregateId(),
                 'last_version' => [
                     '$lt' => $snapshot->lastVersion()
+                ]
+            ],
+            $this->writeConcern
+        );
+
+        $gridFs->remove(
+            [
+                'aggregate_type' => $snapshot->aggregateType()->toString(),
+                'aggregate_id' => $snapshot->aggregateId(),
+                'created_at' => [
+                    '$lt' => $createdAt
                 ]
             ],
             $this->writeConcern

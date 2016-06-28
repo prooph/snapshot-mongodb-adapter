@@ -50,7 +50,7 @@ final class MongoDbSnapshotAdapterTest extends TestCase
      */
     public function it_saves_and_reads()
     {
-        $aggregateType = AggregateType::fromString('foo');
+        $aggregateType = AggregateType::fromString('stdClass');
 
         $aggregateRoot = new \stdClass();
         $aggregateRoot->foo = 'bar';
@@ -78,6 +78,64 @@ final class MongoDbSnapshotAdapterTest extends TestCase
         $gridFs = $this->client->selectDB('test')->getGridFS('bar');
         $files = $gridFs->find();
         $this->assertEquals(1, count($files));
+    }
+
+    /**
+     * @test
+     */
+    public function it_ignores_invalid_serialized_strings()
+    {
+        $time = microtime(true);
+        if (false === strpos($time, '.')) {
+            $time .= '.0000';
+        }
+        $now = \DateTimeImmutable::createFromFormat('U.u', $time, new \DateTimeZone('UTC'));
+
+        $createdAt = new \MongoDate(
+            $now->getTimestamp(),
+            $now->format('u')
+        );
+
+        $gridFs = $this->client->selectDB('test')->getGridFS('stdclass_snapshot');
+        $gridFs->storeBytes(
+            'invalid_serialize_string',
+            [
+                'aggregate_type' => 'stdClass',
+                'aggregate_id' => 'id',
+                'last_version' => 1,
+                'created_at' => $createdAt,
+            ],
+            [
+                'w' => 1,
+            ]
+        );
+
+        $aggregateType = AggregateType::fromString('stdClass');
+
+        $this->assertNull($this->adapter->get($aggregateType, 'id'));
+    }
+
+    /**
+     * @test
+     */
+    public function it_ignores_wrong_returns()
+    {
+        $aggregateType = AggregateType::fromString('foo');
+
+        $aggregateRoot = new \stdClass();
+        $aggregateRoot->foo = 'bar';
+
+        $time = microtime(true);
+        if (false === strpos($time, '.')) {
+            $time .= '.0000';
+        }
+        $now = \DateTimeImmutable::createFromFormat('U.u', $time, new \DateTimeZone('UTC'));
+
+        $snapshot = new Snapshot($aggregateType, 'id', $aggregateRoot, 1, $now);
+
+        $this->adapter->save($snapshot);
+
+        $this->assertNull($this->adapter->get($aggregateType, 'id'));
     }
 
     /**
