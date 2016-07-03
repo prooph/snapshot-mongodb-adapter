@@ -26,7 +26,7 @@ before_script:
 
 script:
   - php -dzend_extension=xdebug.so ./vendor/bin/phpunit --coverage-text --coverage-clover ./build/logs/clover.xml
-  - /vendor/bin/php-cs-fixer fix -v --diff --dry-run
+  - ./vendor/bin/php-cs-fixer fix -v --diff --dry-run
 
 after_script:
   - php vendor/bin/coveralls -v
