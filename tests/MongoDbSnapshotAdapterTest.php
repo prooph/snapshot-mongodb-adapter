@@ -65,15 +65,107 @@ final class MongoDbSnapshotAdapterTest extends TestCase
 
         $this->adapter->save($snapshot);
 
-        $snapshot = new Snapshot($aggregateType, 'id', $aggregateRoot, 1, $now);
-
-        $this->adapter->save($snapshot);
-
         $this->assertNull($this->adapter->get($aggregateType, 'invalid'));
 
         $readSnapshot = $this->adapter->get($aggregateType, 'id');
 
-        $this->assertEquals($snapshot, $readSnapshot);
+        $this->assertEquals($aggregateRoot, $readSnapshot->aggregateRoot());
+        $this->assertEquals('stdClass', $readSnapshot->aggregateType());
+        $this->assertEquals('id', $readSnapshot->aggregateId());
+        $this->assertEquals(1, $readSnapshot->lastVersion());
+        $this->assertEquals('bar', $readSnapshot->aggregateRoot()->foo);
+
+        $gridFs = $this->client->selectDB('test')->getGridFS('bar');
+        $files = $gridFs->find();
+        $this->assertEquals(1, count($files));
+    }
+
+    /**
+     * @test
+     */
+    public function it_saves_two_versions_gets_the_latest_back()
+    {
+        $aggregateType = AggregateType::fromString('stdClass');
+
+        $aggregateRoot = new \stdClass();
+        $aggregateRoot->foo = 'bar';
+
+        $time = microtime(true);
+        if (false === strpos($time, '.')) {
+            $time .= '.0000';
+        }
+        $now = \DateTimeImmutable::createFromFormat('U.u', $time, new \DateTimeZone('UTC'));
+
+        $snapshot = new Snapshot($aggregateType, 'id', $aggregateRoot, 1, $now);
+
+        $this->adapter->save($snapshot);
+
+        $aggregateRoot = new \stdClass();
+        $aggregateRoot->foo = 'baz';
+
+        $time = microtime(true);
+        if (false === strpos($time, '.')) {
+            $time .= '.0000';
+        }
+        $now = \DateTimeImmutable::createFromFormat('U.u', $time, new \DateTimeZone('UTC'));
+
+        $snapshot = new Snapshot($aggregateType, 'id', $aggregateRoot, 2, $now);
+
+        $this->adapter->save($snapshot);
+
+        $readSnapshot = $this->adapter->get($aggregateType, 'id');
+
+        $this->assertEquals($aggregateRoot, $readSnapshot->aggregateRoot());
+        $this->assertEquals('stdClass', $readSnapshot->aggregateType());
+        $this->assertEquals('id', $readSnapshot->aggregateId());
+        $this->assertEquals(2, $readSnapshot->lastVersion());
+        $this->assertEquals('baz', $readSnapshot->aggregateRoot()->foo);
+
+        $gridFs = $this->client->selectDB('test')->getGridFS('bar');
+        $files = $gridFs->find();
+        $this->assertEquals(1, count($files));
+    }
+
+    /**
+     * @test
+     */
+    public function it_saves_two_versions_gets_the_latest_back_when_older_written_last()
+    {
+        $aggregateType = AggregateType::fromString('stdClass');
+
+        $aggregateRoot2 = new \stdClass();
+        $aggregateRoot2->foo = 'baz';
+
+        $time = microtime(true);
+        if (false === strpos($time, '.')) {
+            $time .= '.0000';
+        }
+        $now = \DateTimeImmutable::createFromFormat('U.u', $time, new \DateTimeZone('UTC'));
+
+        $snapshot2 = new Snapshot($aggregateType, 'id', $aggregateRoot2, 2, $now);
+
+        $this->adapter->save($snapshot2);
+
+        $aggregateRoot1 = new \stdClass();
+        $aggregateRoot1->foo = 'bar';
+
+        $time = microtime(true);
+        if (false === strpos($time, '.')) {
+            $time .= '.0000';
+        }
+        $now = \DateTimeImmutable::createFromFormat('U.u', $time, new \DateTimeZone('UTC'));
+
+        $snapshot1 = new Snapshot($aggregateType, 'id', $aggregateRoot1, 1, $now);
+
+        $this->adapter->save($snapshot1);
+
+        $readSnapshot = $this->adapter->get($aggregateType, 'id');
+
+        $this->assertEquals($aggregateRoot2, $readSnapshot->aggregateRoot());
+        $this->assertEquals('stdClass', $readSnapshot->aggregateType());
+        $this->assertEquals('id', $readSnapshot->aggregateId());
+        $this->assertEquals(2, $readSnapshot->lastVersion());
+        $this->assertEquals('baz', $readSnapshot->aggregateRoot()->foo);
 
         $gridFs = $this->client->selectDB('test')->getGridFS('bar');
         $files = $gridFs->find();

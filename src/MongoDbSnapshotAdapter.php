@@ -86,26 +86,29 @@ final class MongoDbSnapshotAdapter implements Adapter
     {
         $gridFs = $this->getGridFs($aggregateType);
 
-        $gridFsfile = $gridFs->findOne(
-            [
-                '$query' => [
-                    'aggregate_type' => $aggregateType->toString(),
-                    'aggregate_id' => $aggregateId,
-                ],
-                '$orderBy' => [
-                    'last_version' => -1,
-                ],
-            ]
-        );
+        $gridFsCursor = $gridFs
+            ->find([
+                'aggregate_type' => $aggregateType->toString(),
+                'aggregate_id' => $aggregateId,
+            ])
+            ->sort([
+                'last_version' => -1,
+            ])
+            ->limit(1);
 
-        if (!$gridFsfile) {
+        if (! $gridFsFile = $gridFsCursor->current()) {
+            $gridFsCursor->next();
+            $gridFsFile = $gridFsCursor->current();
+        }
+
+        if (! $gridFsFile) {
             return;
         }
 
-        $createdAt = $gridFsfile->file['created_at']->toDateTime();
+        $createdAt = $gridFsFile->file['created_at']->toDateTime();
 
         try {
-            $aggregateRoot = unserialize($gridFsfile->getBytes());
+            $aggregateRoot = unserialize($gridFsFile->getBytes());
         } catch (\Exception $e) {
             // problem getting file from mongodb
             return;
@@ -121,7 +124,7 @@ final class MongoDbSnapshotAdapter implements Adapter
             $aggregateType,
             $aggregateId,
             $aggregateRoot,
-            $gridFsfile->file['last_version'],
+            $gridFsFile->file['last_version'],
             DateTimeImmutable::createFromFormat(
                 'Y-m-d\TH:i:s.u',
                 $createdAt->format('Y-m-d\TH:i:s.u'),
@@ -171,6 +174,7 @@ final class MongoDbSnapshotAdapter implements Adapter
             [
                 'aggregate_type' => $snapshot->aggregateType()->toString(),
                 'aggregate_id' => $snapshot->aggregateId(),
+                'last_version' => $snapshot->lastVersion(),
                 'created_at' => [
                     '$lt' => $createdAt
                 ]
