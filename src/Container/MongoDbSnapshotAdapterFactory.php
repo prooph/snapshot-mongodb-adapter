@@ -74,7 +74,6 @@ final class MongoDbSnapshotAdapterFactory implements RequiresConfig, RequiresMan
                     'snapshot_grid_fs_map' => [],
                     'write_concern' => [
                         'w' => 1,
-                        'j' => true
                     ]
                 ]
             ]
