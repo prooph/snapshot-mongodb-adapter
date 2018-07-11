@@ -18,6 +18,10 @@ Some general notes about how to use interop factories shipped with prooph compon
 Use the [mongodb snapshot adapter factory](src/Container/MongoDbSnapshotAdapterFactory.php) to set up the adapter. If your IoC container supports callable factories
 you can register the factory under a service id of your choice and configure this service id as `$config['prooph']['snapshot_store']['adpater']['type'] = <adapter_service_id>`.
 
+## Requirements
+
+- MongoDB >= 4.0
+- MongoDB PHP Driver >= 1.5.2
 
 ## Indexing
 
@@ -25,8 +29,11 @@ For faster access to the snapshots, it's recommended to index the metadata.
 
 For example:
 
-    db.user_snapshot.files.createIndex({aggregate_type: 1, aggregate_id: 1});
+```
+    db.[your snapshot collection].files.createIndex({"metadata.aggregate_type": 1, "metadata.aggregate_id": 1, "metadata.last_version": -1});
+```
 
+or use `\Prooph\EventStore\Snapshot\Adapter\MongoDb\MongoDbSnapshotAdapter::createIndexes`
 
 Support
 -------

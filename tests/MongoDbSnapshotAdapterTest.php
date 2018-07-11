@@ -1,24 +1,26 @@
 <?php
 /*
  * This file is part of the prooph/snapshot-mongodb-adapter.
- * (c) 2014 - 2015 prooph software GmbH <contact@prooph.de>
+ * (c) 2014 - 2018 prooph software GmbH <contact@prooph.de>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
- *
- * Date: 10/10/15 - 15:37
  */
 
-namespace ProophTest\EventStore\Snapshot\Adpater\MongoDb;
+declare(strict_types=1);
 
-use PHPUnit_Framework_TestCase as TestCase;
+namespace ProophTest\EventStore\Snapshot\Adapter\MongoDb;
+
+use MongoDB\Client;
+use MongoDB\GridFS\Bucket;
+use PHPUnit\Framework\TestCase;
 use Prooph\EventStore\Aggregate\AggregateType;
 use Prooph\EventStore\Snapshot\Adapter\MongoDb\MongoDbSnapshotAdapter;
 use Prooph\EventStore\Snapshot\Snapshot;
 
 /**
  * Class MongoDbSnapshotAdapterTest
- * @package ProophTest\EventStore\Adpater\MongoDb
+ * @package ProophTest\EventStore\Adapter\MongoDb
  */
 final class MongoDbSnapshotAdapterTest extends TestCase
 {
@@ -28,35 +30,39 @@ final class MongoDbSnapshotAdapterTest extends TestCase
     private $adapter;
 
     /**
-     * @var \MongoClient
+     * @var Client
      */
     private $client;
 
     protected function setUp()
     {
-        $this->client = new \MongoClient();
-        $this->client->selectDB('test')->drop();
+        $this->client = TestUtil::getConnection();
 
-        $this->adapter = new MongoDbSnapshotAdapter($this->client, 'test');
+        $this->adapter = new MongoDbSnapshotAdapter(
+            $this->client,
+            TestUtil::getDatabaseName(),
+            [],
+            'bar'
+        );
     }
 
     protected function tearDown()
     {
-        $this->client->selectDB('test')->drop();
+        TestUtil::tearDownDatabase();
     }
 
     /**
      * @test
      */
-    public function it_saves_and_reads()
+    public function it_saves_and_reads(): void
     {
         $aggregateType = AggregateType::fromString('stdClass');
 
         $aggregateRoot = new \stdClass();
         $aggregateRoot->foo = 'bar';
 
-        $time = microtime(true);
-        if (false === strpos($time, '.')) {
+        $time = (string) \microtime(true);
+        if (false === \strpos($time, '.')) {
             $time .= '.0000';
         }
         $now = \DateTimeImmutable::createFromFormat('U.u', $time, new \DateTimeZone('UTC'));
@@ -75,23 +81,23 @@ final class MongoDbSnapshotAdapterTest extends TestCase
         $this->assertEquals(1, $readSnapshot->lastVersion());
         $this->assertEquals('bar', $readSnapshot->aggregateRoot()->foo);
 
-        $gridFs = $this->client->selectDB('test')->getGridFS('bar');
+        $gridFs = $this->getBucket(TestUtil::getDatabaseName(), 'bar');
         $files = $gridFs->find();
-        $this->assertEquals(1, count($files));
+        $this->assertEquals(1, \count($files->toArray()));
     }
 
     /**
      * @test
      */
-    public function it_saves_two_versions_gets_the_latest_back()
+    public function it_saves_two_versions_gets_the_latest_back(): void
     {
         $aggregateType = AggregateType::fromString('stdClass');
 
         $aggregateRoot = new \stdClass();
         $aggregateRoot->foo = 'bar';
 
-        $time = microtime(true);
-        if (false === strpos($time, '.')) {
+        $time = (string) \microtime(true);
+        if (false === \strpos($time, '.')) {
             $time .= '.0000';
         }
         $now = \DateTimeImmutable::createFromFormat('U.u', $time, new \DateTimeZone('UTC'));
@@ -103,8 +109,8 @@ final class MongoDbSnapshotAdapterTest extends TestCase
         $aggregateRoot = new \stdClass();
         $aggregateRoot->foo = 'baz';
 
-        $time = microtime(true);
-        if (false === strpos($time, '.')) {
+        $time = (string) \microtime(true);
+        if (false === \strpos($time, '.')) {
             $time .= '.0000';
         }
         $now = \DateTimeImmutable::createFromFormat('U.u', $time, new \DateTimeZone('UTC'));
@@ -121,23 +127,23 @@ final class MongoDbSnapshotAdapterTest extends TestCase
         $this->assertEquals(2, $readSnapshot->lastVersion());
         $this->assertEquals('baz', $readSnapshot->aggregateRoot()->foo);
 
-        $gridFs = $this->client->selectDB('test')->getGridFS('bar');
+        $gridFs = $this->getBucket(TestUtil::getDatabaseName(), 'bar');
         $files = $gridFs->find();
-        $this->assertEquals(1, count($files));
+        $this->assertEquals(1, \count($files->toArray()));
     }
 
     /**
      * @test
      */
-    public function it_saves_two_versions_gets_the_latest_back_when_older_written_last()
+    public function it_saves_two_versions_gets_the_latest_back_when_older_written_last(): void
     {
         $aggregateType = AggregateType::fromString('stdClass');
 
         $aggregateRoot2 = new \stdClass();
         $aggregateRoot2->foo = 'baz';
 
-        $time = microtime(true);
-        if (false === strpos($time, '.')) {
+        $time = (string) \microtime(true);
+        if (false === \strpos($time, '.')) {
             $time .= '.0000';
         }
         $now = \DateTimeImmutable::createFromFormat('U.u', $time, new \DateTimeZone('UTC'));
@@ -149,8 +155,8 @@ final class MongoDbSnapshotAdapterTest extends TestCase
         $aggregateRoot1 = new \stdClass();
         $aggregateRoot1->foo = 'bar';
 
-        $time = microtime(true);
-        if (false === strpos($time, '.')) {
+        $time = (string) \microtime(true);
+        if (false === \strpos($time, '.')) {
             $time .= '.0000';
         }
         $now = \DateTimeImmutable::createFromFormat('U.u', $time, new \DateTimeZone('UTC'));
@@ -167,38 +173,36 @@ final class MongoDbSnapshotAdapterTest extends TestCase
         $this->assertEquals(2, $readSnapshot->lastVersion());
         $this->assertEquals('baz', $readSnapshot->aggregateRoot()->foo);
 
-        $gridFs = $this->client->selectDB('test')->getGridFS('bar');
+        $gridFs = $this->getBucket(TestUtil::getDatabaseName(), 'bar');
         $files = $gridFs->find();
-        $this->assertEquals(1, count($files));
+        $this->assertEquals(1, \count($files->toArray()));
     }
 
     /**
      * @test
      */
-    public function it_ignores_invalid_serialized_strings()
+    public function it_ignores_invalid_serialized_strings(): void
     {
-        $time = microtime(true);
-        if (false === strpos($time, '.')) {
+        $time = (string) \microtime(true);
+        if (false === \strpos($time, '.')) {
             $time .= '.0000';
         }
         $now = \DateTimeImmutable::createFromFormat('U.u', $time, new \DateTimeZone('UTC'));
 
-        $createdAt = new \MongoDate(
-            $now->getTimestamp(),
-            $now->format('u')
-        );
+        $createdAt = $now->format('Y-m-d\TH:i:s.u');
 
-        $gridFs = $this->client->selectDB('test')->getGridFS('stdclass_snapshot');
-        $gridFs->storeBytes(
-            'invalid_serialize_string',
+        $gridFs = $this->getBucket(TestUtil::getDatabaseName(), 'bar');
+        $gridFs->uploadFromStream(
+            'id',
+            $this->createStream('invalid_serialize_string'),
             [
-                'aggregate_type' => 'stdClass',
-                'aggregate_id' => 'id',
-                'last_version' => 1,
-                'created_at' => $createdAt,
-            ],
-            [
-                'w' => 1,
+                '_id' => 'id',
+                'metadata' => [
+                    'aggregate_id' => 'id',
+                    'aggregate_type' => 'stdClass',
+                    'last_version' => 1,
+                    'created_at' => $createdAt,
+                ],
             ]
         );
 
@@ -210,40 +214,13 @@ final class MongoDbSnapshotAdapterTest extends TestCase
     /**
      * @test
      */
-    public function it_ignores_wrong_returns()
-    {
-        $aggregateType = AggregateType::fromString('foo');
-
-        $aggregateRoot = new \stdClass();
-        $aggregateRoot->foo = 'bar';
-
-        $time = microtime(true);
-        if (false === strpos($time, '.')) {
-            $time .= '.0000';
-        }
-        $now = \DateTimeImmutable::createFromFormat('U.u', $time, new \DateTimeZone('UTC'));
-
-        $snapshot = new Snapshot($aggregateType, 'id', $aggregateRoot, 1, $now);
-
-        $this->adapter->save($snapshot);
-
-        $this->assertNull($this->adapter->get($aggregateType, 'id'));
-    }
-
-    /**
-     * @test
-     */
-    public function it_uses_custom_snapshot_grid_fs_map_and_write_concern()
+    public function it_uses_custom_snapshot_grid_fs_map_and_write_concern(): void
     {
         $this->adapter = new MongoDbSnapshotAdapter(
             $this->client,
-            'test',
+            TestUtil::getDatabaseName(),
             [
-                'w' => 'majority',
-                'j' => true
-            ],
-            [
-                'foo' => 'bar'
+                'foo' => 'bar',
             ]
         );
 
@@ -252,8 +229,8 @@ final class MongoDbSnapshotAdapterTest extends TestCase
         $aggregateRoot = new \stdClass();
         $aggregateRoot->foo = 'bar';
 
-        $time = microtime(true);
-        if (false === strpos($time, '.')) {
+        $time = (string) \microtime(true);
+        if (false === \strpos($time, '.')) {
             $time .= '.0000';
         }
         $now = \DateTimeImmutable::createFromFormat('U.u', $time);
@@ -262,9 +239,29 @@ final class MongoDbSnapshotAdapterTest extends TestCase
 
         $this->adapter->save($snapshot);
 
-        $gridFs = $this->client->selectDB('test')->getGridFS('bar');
-        $file = $gridFs->findOne();
+        $snapshotFromStore = $this->adapter->get($aggregateType, 'id');
 
-        $this->assertNotNull($file);
+        $this->assertEquals($snapshot, $snapshotFromStore);
+    }
+
+    private function getBucket(string $dbName, string $aggregateType): Bucket
+    {
+        return $this->client->selectDatabase($dbName)->selectGridFSBucket([
+            'bucketName' => $aggregateType,
+        ]);
+    }
+
+    /**
+     * Creates an in-memory stream with the given data.
+     *
+     * @return resource
+     */
+    private function createStream(string $data = '')
+    {
+        $stream = \fopen('php://temp', 'w+b');
+        \fwrite($stream, $data);
+        \rewind($stream);
+
+        return $stream;
     }
 }
