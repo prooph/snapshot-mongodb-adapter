@@ -1,0 +1,28 @@
+version: '2'
+services:
+  composer:
+    image: prooph/composer:7.1
+    volumes:
+    - .:/app
+    environment:
+    - COMPOSER_ALLOW_SUPERUSER=1
+    command: install
+
+  php:
+    image: prooph/php:7.1-cli-xdebug
+    environment:
+    - PHP_IDE_CONFIG=serverName=application
+    - DB_URI=mongodb://node0.mongodb.local:27017
+    - DB_NAME=event_store_tests
+    volumes:
+    - .:/app
+
+  mongodb:
+    image: mongo:4.0
+    ports:
+    - "27017:27017"
+    hostname: node0.mongodb.local
+    networks:
+      default:
+        aliases:
+        - node0.mongodb.local

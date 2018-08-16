@@ -1,20 +1,25 @@
 <?php
 /*
  * This file is part of the prooph/snapshot-mongodb-adapter.
- * (c) 2014 - 2015 prooph software GmbH <contact@prooph.de>
+ * (c) 2014 - 2018 prooph software GmbH <contact@prooph.de>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
- *
- * Date: 10/10/15 - 13:57
  */
+
+declare(strict_types=1);
 
 namespace Prooph\EventStore\Snapshot\Adapter\MongoDb;
 
-use Assert\Assertion;
 use DateTimeImmutable;
 use DateTimeZone;
-use MongoClient;
+use MongoDB\BSON\ObjectId;
+use MongoDB\Client;
+use MongoDB\Collection;
+use MongoDB\Driver\ReadConcern;
+use MongoDB\Driver\WriteConcern;
+use MongoDB\GridFS\Bucket;
+use MongoDB\GridFS\Exception\FileNotFoundException;
 use Prooph\EventStore\Aggregate\AggregateType;
 use Prooph\EventStore\Snapshot\Adapter\Adapter;
 use Prooph\EventStore\Snapshot\Snapshot;
@@ -26,9 +31,9 @@ use Prooph\EventStore\Snapshot\Snapshot;
 final class MongoDbSnapshotAdapter implements Adapter
 {
     /**
-     * @var \MongoClient
+     * @var Client
      */
-    private $mongoClient;
+    private $client;
 
     /**
      * @var string
@@ -36,188 +41,234 @@ final class MongoDbSnapshotAdapter implements Adapter
     private $dbName;
 
     /**
-     * Mongo DB write concern
-     * The default options can be overridden with the constructor
-     *
-     * @var array
-     */
-    private $writeConcern = [
-        'w' => 1,
-    ];
-
-    /**
      * Custom sourceType to snapshot mapping
      *
      * @var array
      */
-    private $snapshotGridFsMap = [];
+    private $snapshotGridFsMap;
 
     /**
-     * @param MongoClient $mongoClient
-     * @param string $dbName
-     * @param array|null $writeConcern
-     * @param array $snapshotGridFsMap
+     * @var string
      */
+    private $defaultSnapshotGridFsName;
+
+    /**
+     * @var ReadConcern
+     */
+    private $readConcern;
+    /**
+     * @var WriteConcern
+     */
+    private $writeConcern;
+
     public function __construct(
-        MongoClient $mongoClient,
-        $dbName,
-        array $writeConcern = null,
-        array $snapshotGridFsMap = []
+        Client $client,
+        string $dbName,
+        array $snapshotGridFsMap = [],
+        string $defaultSnapshotGridFsName = 'snapshots',
+        ReadConcern $readConcern = null,
+        WriteConcern $writeConcern = null
     ) {
-        Assertion::minLength($dbName, 1, 'Mongo database name is missing');
-
-        $this->mongoClient      = $mongoClient;
-        $this->dbName           = $dbName;
+        $this->client = $client;
+        $this->dbName = $dbName;
         $this->snapshotGridFsMap = $snapshotGridFsMap;
-
-        if (null !== $writeConcern) {
-            $this->writeConcern = $writeConcern;
-        }
+        $this->defaultSnapshotGridFsName = $defaultSnapshotGridFsName;
+        $this->readConcern = $readConcern;
+        $this->writeConcern = $writeConcern;
     }
 
-    /**
-     * Get the aggregate root if it exists otherwise null
-     *
-     * @param AggregateType $aggregateType
-     * @param string $aggregateId
-     * @return Snapshot
-     */
     public function get(AggregateType $aggregateType, $aggregateId)
     {
-        $gridFs = $this->getGridFs($aggregateType);
+        $bucket = $this->getGridFs($aggregateType->toString());
 
-        $gridFsCursor = $gridFs
-            ->find([
-                'aggregate_type' => $aggregateType->toString(),
-                'aggregate_id' => $aggregateId,
-            ])
-            ->sort([
-                'last_version' => -1,
-            ])
-            ->limit(1);
+        $snapshot = $bucket->findOne(
+            [
+                'metadata.aggregate_id' => $aggregateId,
+                'metadata.aggregate_type' => $aggregateType->toString(),
+            ],
+            [
+                'projection' => ['_id' => 1, 'metadata' => 1],
+                'sort' => ['metadata.last_version' => -1],
+            ]
+        );
 
-        if (! $gridFsFile = $gridFsCursor->current()) {
-            $gridFsCursor->next();
-            $gridFsFile = $gridFsCursor->current();
+        if (empty($snapshot['_id'])) {
+            return null;
         }
-
-        if (! $gridFsFile) {
-            return;
-        }
-
-        $createdAt = $gridFsFile->file['created_at']->toDateTime();
 
         try {
-            $aggregateRoot = unserialize($gridFsFile->getBytes());
-        } catch (\Exception $e) {
-            // problem getting file from mongodb
-            return;
+            $stream = $bucket->openDownloadStream($snapshot['_id']);
+        } catch (FileNotFoundException $e) {
+            return null;
         }
+        $aggregateRoot = false;
 
-        $aggregateTypeString = $aggregateType->toString();
-        if (! $aggregateRoot instanceof $aggregateTypeString) {
-            // invalid instance returned
-            return;
+        try {
+            $destination = $this->createStream();
+            \stream_copy_to_stream($stream, $destination);
+            $aggregateRoot = \unserialize(\stream_get_contents($destination, -1, 0));
+        } catch (\Throwable $e) {
+            // nothing to do
+        } finally {
+            // delete in case of error, so new snapshot can be created
+            if ($aggregateRoot === false) {
+                $this->deleteByAggregateId($aggregateId, $aggregateType);
+
+                return null;
+            }
         }
+        $createdAt = $snapshot['metadata']['created_at'] ?? '';
+        $lastVersion = $snapshot['metadata']['last_version'] ?? 0;
 
         return new Snapshot(
             $aggregateType,
             $aggregateId,
             $aggregateRoot,
-            $gridFsFile->file['last_version'],
-            DateTimeImmutable::createFromFormat(
-                'Y-m-d\TH:i:s.u',
-                $createdAt->format('Y-m-d\TH:i:s.u'),
-                new DateTimeZone('UTC')
-            )
+            $lastVersion,
+            DateTimeImmutable::createFromFormat('Y-m-d\TH:i:s.u', $createdAt, new DateTimeZone('UTC'))
         );
     }
 
-    /**
-     * Save a snapshot
-     *
-     * @param Snapshot $snapshot
-     * @return void
-     */
     public function save(Snapshot $snapshot)
     {
-        $gridFs = $this->getGridFs($snapshot->aggregateType());
+        $aggregateId = $snapshot->aggregateId();
+        $aggregateType = $snapshot->aggregateType()->toString();
 
-        $createdAt = new \MongoDate(
-            $snapshot->createdAt()->getTimestamp(),
-            $snapshot->createdAt()->format('u')
-        );
+        $bucket = $this->getGridFs($aggregateType);
 
-        $gridFs->storeBytes(
-            serialize($snapshot->aggregateRoot()),
+        $fileId = new ObjectId();
+
+        $bucket->uploadFromStream(
+            $fileId,
+            $this->createStream(\serialize($snapshot->aggregateRoot())),
             [
-                'aggregate_type' => $snapshot->aggregateType()->toString(),
-                'aggregate_id' => $snapshot->aggregateId(),
-                'last_version' => $snapshot->lastVersion(),
-                'created_at' => $createdAt,
-            ],
-            $this->writeConcern
+                '_id' => $fileId,
+                'metadata' => [
+                    'aggregate_id' => $aggregateId,
+                    'aggregate_type' => $aggregateType,
+                    'last_version' => $snapshot->lastVersion(),
+                    'created_at' => $snapshot->createdAt()->format('Y-m-d\TH:i:s.u'),
+                ],
+            ]
         );
 
-        $gridFs->remove(
-            [
-                'aggregate_type' => $snapshot->aggregateType()->toString(),
-                'aggregate_id' => $snapshot->aggregateId(),
-                'last_version' => [
-                    '$lt' => $snapshot->lastVersion()
-                ]
-            ],
-            $this->writeConcern
-        );
-
-        $gridFs->remove(
-            [
-                'aggregate_type' => $snapshot->aggregateType()->toString(),
-                'aggregate_id' => $snapshot->aggregateId(),
-                'last_version' => $snapshot->lastVersion(),
-                'created_at' => [
-                    '$lt' => $createdAt
-                ]
-            ],
-            $this->writeConcern
-        );
+        $this->removeOldSnapshots($aggregateType, $aggregateId);
     }
 
-    /**
-     * Get mongo db stream collection
-     *
-     * @param AggregateType $aggregateType
-     * @return \MongoGridFs
-     */
-    private function getGridFs(AggregateType $aggregateType)
+    public function removeOldSnapshots(string $aggregateType, string $aggregateId): void
     {
-        return $this->mongoClient->selectDB($this->dbName)->getGridFS($this->getGridFsName($aggregateType));
-    }
+        $bucket = $this->getGridFs($aggregateType);
 
-    /**
-     * @param AggregateType $aggregateType
-     * @return string
-     */
-    private function getGridFsName(AggregateType $aggregateType)
-    {
-        if (isset($this->snapshotGridFsMap[$aggregateType->toString()])) {
-            $gridFsName = $this->snapshotGridFsMap[$aggregateType->toString()];
-        } else {
-            $gridFsName = strtolower($this->getShortAggregateTypeName($aggregateType));
-            if (strpos($gridFsName, "_snapshot") === false) {
-                $gridFsName.= "_snapshot";
+        $cursor = $bucket->find(
+            [
+                'metadata.aggregate_id' => $aggregateId,
+                'metadata.aggregate_type' => $aggregateType,
+            ],
+            [
+                'projection' => ['_id' => 1],
+                'sort' => ['metadata.last_version' => -1],
+                'skip' => 1,
+            ]
+        );
+
+        foreach ($cursor as $oldSnapshot) {
+            try {
+                $bucket->delete($oldSnapshot['_id']);
+            } catch (\Throwable $e) {
+                // ignore
             }
         }
+    }
+
+    public function deleteByAggregateType(AggregateType $aggregateType): void
+    {
+        $aggregateType = $aggregateType->toString();
+
+        $bucket = $this->getGridFs($aggregateType);
+
+        $cursor = $bucket->find(
+            [
+                'metadata.aggregate_type' => $aggregateType,
+            ],
+            ['projection' => ['_id' => 1]]
+        );
+
+        foreach ($cursor as $doc) {
+            try {
+                $bucket->delete($doc['_id']);
+            } catch (\Throwable $e) {
+                continue;
+            }
+        }
+    }
+
+    public function deleteByAggregateId(string $aggregateId, AggregateType $aggregateType): void
+    {
+        $bucket = $this->getGridFs($aggregateType->toString());
+
+        $snapshot = $bucket->findOne(
+            [
+                'metadata.aggregate_id' => $aggregateId,
+                'metadata.aggregate_type' => $aggregateType->toString(),
+            ],
+            [
+                'projection' => ['_id' => 1],
+            ]
+        );
+
+        try {
+            $bucket->delete($snapshot['_id']);
+        } catch (\Throwable $e) {
+            // ignore
+        }
+    }
+
+    private function getGridFs(string $aggregateType): Bucket
+    {
+        return $this->client->selectDatabase($this->dbName)->selectGridFSBucket([
+            'bucketName' => $this->getGridFsName($aggregateType),
+            'readConcern' => $this->readConcern,
+            'writeConcern' => $this->writeConcern,
+        ]);
+    }
+
+    private function getGridFsName(string $aggregateType): string
+    {
+        if (isset($this->snapshotGridFsMap[$aggregateType])) {
+            $gridFsName = $this->snapshotGridFsMap[$aggregateType];
+        } else {
+            $gridFsName = $this->defaultSnapshotGridFsName;
+        }
+
         return $gridFsName;
     }
 
     /**
-     * @param AggregateType $aggregateType
-     * @return string
+     * Creates an in-memory stream with the given data.
+     *
+     * @param string $data
+     * @return resource
      */
-    private function getShortAggregateTypeName(AggregateType $aggregateType)
+    private function createStream(string $data = '')
     {
-        $aggregateTypeName = str_replace('-', '_', $aggregateType->toString());
-        return implode('', array_slice(explode('\\', $aggregateTypeName), -1));
+        $stream = \fopen('php://temp', 'w+b');
+        \fwrite($stream, $data);
+        \rewind($stream);
+
+        return $stream;
+    }
+
+    public static function createIndexes(Collection $collection): void
+    {
+        $collection->createIndex(
+            [
+                'metadata.aggregate_type' => 1,
+                'metadata.aggregate_id' => 1,
+                'metadata.last_version' => -1,
+            ],
+            [
+                'background' => true,
+            ]
+        );
     }
 }

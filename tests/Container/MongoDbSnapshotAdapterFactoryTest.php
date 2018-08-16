@@ -1,20 +1,21 @@
 <?php
 /*
  * This file is part of the prooph/snapshot-mongodb-adapter.
- * (c) 2014 - 2015 prooph software GmbH <contact@prooph.de>
+ * (c) 2014 - 2018 prooph software GmbH <contact@prooph.de>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
- *
- * Date: 10/18/15 - 19:58
  */
+
+declare(strict_types=1);
 
 namespace ProophTest\EventStore\Snapshot\Adapter\MongoDb\Container;
 
-use Interop\Container\ContainerInterface;
-use PHPUnit_Framework_TestCase as TestCase;
+use MongoDB\Client;
+use PHPUnit\Framework\TestCase;
 use Prooph\EventStore\Snapshot\Adapter\MongoDb\Container\MongoDbSnapshotAdapterFactory;
 use Prooph\EventStore\Snapshot\Adapter\MongoDb\MongoDbSnapshotAdapter;
+use Psr\Container\ContainerInterface;
 
 /**
  * Class MongoDbSnapshotAdapterFactoryTest
@@ -34,11 +35,11 @@ final class MongoDbSnapshotAdapterFactoryTest extends TestCase
                     'adapter' => [
                         'type' => MongoDbSnapshotAdapter::class,
                         'options' => [
-                            'db_name' => 'test-db-name'
-                        ]
-                    ]
-                ]
-            ]
+                            'db_name' => 'test-db-name',
+                        ],
+                    ],
+                ],
+            ],
         ]);
 
         $factory = new MongoDbSnapshotAdapterFactory();
@@ -63,17 +64,17 @@ final class MongoDbSnapshotAdapterFactoryTest extends TestCase
                             'mongo_connection_alias' => 'mongo-client',
                             'write_concern' => [
                                 'w' => 'majority',
-                                'j' => true
+                                'j' => true,
                             ],
                             'snapshot_grid_fs_map' => [
-                                'foo' => 'bar'
-                            ]
-                        ]
-                    ]
-                ]
-            ]
+                                'foo' => 'bar',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
         ]);
-        $container->get('mongo-client')->willReturn($this->prophesize(\MongoClient::class)->reveal());
+        $container->get('mongo-client')->willReturn($this->prophesize(Client::class)->reveal());
 
         $factory = new MongoDbSnapshotAdapterFactory();
         $adapter = $factory($container->reveal());
