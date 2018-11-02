@@ -2,7 +2,7 @@
 
 /**
  * /*
- * This file is part of the prooph/snapshot-mongodb-adapter.
+ * This file is part of prooph/snapshot-mongodb-adapter.
  * (c) 2014-2018 - 2018 prooph software GmbH <contact@prooph.de>
  *
  * For the full copyright and license information, please view the LICENSE
